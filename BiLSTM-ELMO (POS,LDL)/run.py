@@ -72,7 +72,6 @@ def read_data(filename):
 
 a,b,c,d,e,f,g = read_data('train_sci.txt')
 a1,b1,c1,d1,e1,f1,g1 = read_data('valid_sci.txt')
-#a2,b2,c2,d2,e2,f2,g2 = read_data('dev_slide_emph.txt')
 
 def read_data_test(filename):
     """
@@ -241,7 +240,7 @@ def create_input_tensors(words, tags, probs, word_map, char_map, tag_map, is_pun
         #padded_probs.append(p + [0] * (word_pad_len - len(p)))
         for i in range((word_pad_len)-len(p)):
             p.append([float(0),float(1)])
-            
+
         padded_probs.append(p)
 
         # is_punct is getting padded
@@ -366,7 +365,7 @@ embeddings, word_map, lm_vocab_size = load_embeddings(emb_file, word_map,expand_
 charset_size = len(char_map)
 model = LM_LSTM_CRF(charset_size, char_emb_dim, char_rnn_dim, char_rnn_layers,
         lm_vocab_size, word_emb_dim, word_rnn_dim, word_rnn_layers, dropout).to('cuda')
-        
+
 model.init_word_embeddings(embeddings.to(device))  # initialize embedding layer with pre-trained embeddings
 model.fine_tune_word_embeddings(fine_tune_word_embeddings)  # fine-tune
 optimizer = optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate)
@@ -395,7 +394,7 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = print_frequency):
-    
+
     model.train()  # training mode enables dropout
 
     batch_time = AverageMeter()  # forward prop. + back prop. time per batch
@@ -421,14 +420,14 @@ def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = print_fre
         cmarkers_f = cmarkers_f[:, :max_word_len].to(device)
         cmarkers_b = cmarkers_b[:, :max_word_len].to(device)
         tmaps = tmaps[:, :max_word_len].to(device)
-        
+
         words = []
         for i in range(len(wmaps)):
             value_to_key = []
             for j in range(len(wmaps[i])):
                 value_to_key.append(list(word_map.keys())[list(word_map.values()).index(wmaps.cpu().data.numpy()[i][j])])
             words.append(value_to_key)
-        
+
         # Forward prop.
         scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps,puncts)
 
@@ -437,10 +436,10 @@ def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = print_fre
         # So, prediction lengths are word sequence lengths - 1
         lm_lengths = wmap_lengths_sorted - 1
         lm_lengths = lm_lengths.tolist()
-        
+
         # loss
-        probs_sorted.resize_(scores.size())  
-        
+        probs_sorted.resize_(scores.size())
+
         # predicted scores and actual targets
         scores = pack_padded_sequence(scores, lm_lengths, batch_first=True).data
         targets = pack_padded_sequence(probs_sorted, lm_lengths, batch_first=True).data
@@ -566,7 +565,7 @@ for epoch in range(0, epochs):
                     cmarkers_b = cmarkers_b[:, :max_word_len].to(device)
                     tmaps = tmaps[:, :max_word_len].to(device)
                     puncts = puncts[:, :max_word_len].to(device)
-                    
+
                     #get actual words from the word mappings
                     words = []
                     for i in range(len(wmaps)):
@@ -577,7 +576,7 @@ for epoch in range(0, epochs):
 
                     # Forward prop.
                     scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps,puncts)
-                    
+
                     scores = scores.tolist()
                     probs_sorted = probs_sorted.tolist()
                     for i in range(len(scores)):
@@ -615,7 +614,7 @@ for epoch in range(0, epochs):
                 final_results = []
                 with torch.no_grad():
                     for j, ( wmaps_t, cmaps_f_t, cmaps_b_t, cmarkers_f_t, cmarkers_b_t, tmaps_t, wmap_lengths_t, cmap_lengths_t, probs_t,puncts_t) in enumerate(test_loader):
-                       
+
                         max_word_len = max(wmap_lengths_t.tolist())
                         wmaps = wmaps_t[:, :max_word_len].to(device)
                         probs = probs_t[:, :max_word_len].to(device)
@@ -624,7 +623,7 @@ for epoch in range(0, epochs):
                         cmarkers_b = cmarkers_b_t[:, :max_word_len].to(device)
                         tmaps = tmaps_t[:, :max_word_len].to(device)
                         puncts = puncts_t[:, :max_word_len].to(device)
-                       
+
                         words = []
                         for i in range(len(wmaps)):
                             value_to_key = []
@@ -663,12 +662,10 @@ for epoch in range(0, epochs):
                         #batch_num_m, batch_score_m = match_M(batch_scores_no_padd, batch_labels_no_pad)
                         #num_m = [sum(i) for i in zip(num_m, batch_num_m)]
                         #score_m = [sum(i) for i in zip(score_m, batch_score_m)]
-                        
+
                 with open('scores.txt', 'w') as f:
                     f.write(json.dumps(final_results))
 
 
 
 print(max_score)
-
-
