@@ -5,7 +5,7 @@ from allennlp.modules.elmo import Elmo, batch_to_ids
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import numpy as np
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = 'cuda'
 class ElmoLayer(nn.Module):
     def __init__(self,options_file, weight_file):
         super(ElmoLayer, self).__init__()
@@ -19,10 +19,11 @@ class ElmoLayer(nn.Module):
         elmo_representation.to(device)
         if torch.cuda.is_available():
             elmo_representation = elmo_representation.cuda()
-        return elmo_representation
-
+        return elmo_representation 
+    
 
 class Attention(nn.Module):
+    """Attention mechanism written by Gustavo Aguilar https://github.com/gaguilar"""
     def __init__(self,  hidden_size):
         super(Attention, self).__init__()
         self.da = hidden_size
@@ -78,7 +79,7 @@ class Highway(nn.Module):
         :return: output tensor, with same dimensions as input tensor
         """
         transformed = nn.functional.relu(self.transform[0](x))  # transform input
-        g = torch.sigmoid(self.gate[0](x))  # calculate how much of the transformed input to keep
+        g = nn.functional.sigmoid(self.gate[0](x))  # calculate how much of the transformed input to keep
 
         out = g * transformed + (1 - g) * x  # combine input and transformed input in this ratio
 
@@ -86,7 +87,7 @@ class Highway(nn.Module):
         for i in range(1, self.num_layers):
             out = self.dropout(out)
             transformed = nn.functional.relu(self.transform[i](out))
-            g = torch.sigmoid(self.gate[i](out))
+            g = nn.functional.sigmoid(self.gate[i](out))
 
             out = g * transformed + (1 - g) * out
 
@@ -97,27 +98,27 @@ class LM_LSTM_CRF(nn.Module):
 
     def __init__(self, charset_size, char_emb_dim, char_rnn_dim, char_rnn_layers,
                  lm_vocab_size, word_emb_dim, word_rnn_dim, word_rnn_layers, dropout, highway_layers=1):
-
+        
         super(LM_LSTM_CRF, self).__init__()
 
         self.target_size = target_size  # this is the size of the output vocab of the tagging model
         self.hidden_size = hidden_size
-
+        
         self.charset_size = charset_size
         self.char_emb_dim = char_emb_dim
         self.char_rnn_dim = char_rnn_dim
         self.char_rnn_layers = char_rnn_layers
-
+        
 
         self.wordset_size = lm_vocab_size  # this is the size of the input vocab (embedding layer) of the tagging model
         self.word_emb_dim = word_emb_dim
         self.word_rnn_dim = word_rnn_dim
         self.word_rnn_layers = word_rnn_layers
-
+        
         self.highway_layers = highway_layers
 
         self.dropout = nn.Dropout(p=dropout)
-
+        
         self.char_embeds = nn.Embedding(self.charset_size, self.char_emb_dim)  # character embedding layer
         self.forw_char_lstm = nn.LSTM(self.char_emb_dim, self.char_rnn_dim, num_layers=self.char_rnn_layers,
                                       bidirectional=False, dropout=dropout)  # forward character LSTM
@@ -130,15 +131,15 @@ class LM_LSTM_CRF(nn.Module):
         self.word_embeds = nn.Embedding(self.wordset_size, self.word_emb_dim)  # word embedding layer
         self.elmo = ElmoLayer(options_file, weight_file)
         self.word_blstm = nn.LSTM(self.word_emb_dim + self.char_rnn_dim * 2, self.word_rnn_dim, num_layers=self.word_rnn_layers, bidirectional=True, dropout=dropout)  # word BLSTM
-
+        
 
 
         self.attention = Attention(self.word_rnn_dim*2).to(device)
-
+        
         self.fc1 = nn.Linear((self.word_rnn_dim*2)+1, self.hidden_size) #Note that the extra +1 is for the pos tag concat
         self.fc2 = nn.Linear(self.hidden_size, self.target_size)
         self.softmax = nn.LogSoftmax(2)
-
+        
     def init_word_embeddings(self, embeddings):
         """
         Initialize embeddings with pre-trained embeddings.
@@ -155,7 +156,7 @@ class LM_LSTM_CRF(nn.Module):
             p.requires_grad = fine_tune
 
     def forward(self, words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps):
-
+        
         self.batch_size = cmaps_f.size(0)
         self.word_pad_len = wmaps.size(1)
 
@@ -196,8 +197,8 @@ class LM_LSTM_CRF(nn.Module):
 
         # Sanity check
         assert cf.size(1) == max(cmap_lengths.tolist()) == list(cmap_lengths)[0]
-
-
+        
+        
         # Select RNN outputs only at marker points (spaces in the character sequence)
         cmarkers_f = cmarkers_f.unsqueeze(2).expand(self.batch_size, self.word_pad_len, self.char_rnn_dim)
         cmarkers_b = cmarkers_b.unsqueeze(2).expand(self.batch_size, self.word_pad_len, self.char_rnn_dim)
@@ -210,51 +211,51 @@ class LM_LSTM_CRF(nn.Module):
         wmaps = wmaps[word_sort_ind]
         probs = probs[word_sort_ind]
         tmaps = tmaps[word_sort_ind]
-        cf_selected = cf_selected[word_sort_ind]
+        cf_selected = cf_selected[word_sort_ind]  
         cb_selected = cb_selected[word_sort_ind]
         word_order = word_sort_ind.tolist()
         words_word_sorted = []
         for i in range(len(word_order)):
             words_word_sorted.append(words_char_sorted[word_order[i]])
         w = self.elmo(words_word_sorted)
-
-
+        
+        
         # Sub-word information at each word
         subword = self.subword_hw(self.dropout(
             torch.cat((cf_selected, cb_selected), dim=2)))  # (batch_size, word_pad_len, 2 * char_rnn_dim)
-
-
+        
+        
         subword = self.dropout(subword)
-
+        
         # Concatenate word embeddings and sub-word features
         w = torch.cat((w, subword), dim=2)  # (batch_size, word_pad_len, word_emb_dim + 2 * char_rnn_dim)
 
         # Pack padded sequence
         w = pack_padded_sequence(w, list(wmap_lengths), batch_first=True)  # packed sequence of word_emb_dim + 2 * char_rnn_dim, with real sequence lengths
-
+        
         # LSTM
         w, _ = self.word_blstm(w)  # packed sequence of word_rnn_dim, with real sequence lengths
 
         # Unpack packed sequence
         w, _ = pad_packed_sequence(w, batch_first=True)  # (batch_size, max_word_len_in_batch, word_rnn_dim)
         w = self.dropout(w)
-
+        
         mask = [] # creating mask 1 for the token where actual word is there and zero for padding
         for i in range(len(wmap_lengths)):
             mask_row = (np.concatenate([np.ones(wmap_lengths[i]),np.zeros(len(wmaps[i])-wmap_lengths[i])])).tolist()
             mask.append(mask_row)
         #Attention
         att_output, att_weights = self.attention(w, torch.from_numpy(np.asarray(mask)).float())
-
+        
         tmaps = (tmaps.unsqueeze_(-1)).expand(list(att_output.size())[0],list(att_output.size())[1],1).float()
         att_output = torch.cat([att_output, tmaps],2)
-
-
-        # fc layers
-        w = torch.relu(self.fc1(att_output))
+        
+        
+        # fc layers 
+        w = torch.relu(self.fc1(att_output)) 
         w = self.dropout(w)
-
+        
         # final score
         scores = self.softmax(self.fc2(w))
-
+                
         return scores, tmaps, wmaps, probs, wmap_lengths, word_sort_ind

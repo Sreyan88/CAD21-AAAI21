@@ -1,3 +1,4 @@
+# Importing modules and files
 from collections import Counter
 import codecs
 import itertools
@@ -14,7 +15,7 @@ from allennlp.modules.elmo import Elmo, batch_to_ids
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from config import *
 from model import *
-
+import json
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def read_lines( filename):
@@ -72,6 +73,7 @@ def read_data(filename):
 
 a,b,c,d,e,f,g = read_data('train_sci.txt')
 a1,b1,c1,d1,e1,f1,g1 = read_data('valid_sci.txt')
+#a2,b2,c2,d2,e2,f2,g2 = read_data('dev_slide_emph.txt')
 
 def read_data_test(filename):
     """
@@ -124,7 +126,6 @@ def read_data_test(filename):
 
 a2,b2,e2,f2,g2 = read_data_test('test_sci_2.txt')
 
-
 def create_maps(words, tags, min_word_freq=5, min_char_freq=1):
     """
     Creates maps.
@@ -136,12 +137,12 @@ def create_maps(words, tags, min_word_freq=5, min_char_freq=1):
         word_freq.update(w)
         char_freq.update(list(reduce(lambda x, y: list(x) + [' '] + list(y), w)))
         tag_map.update(t)
-
+    
     # add to maps if word freq and char freq are greater than specified min_word_freq and min_char_freq
     word_map = {k: v + 1 for v, k in enumerate([w for w in word_freq.keys() if word_freq[w] > min_word_freq])}
     char_map = {k: v + 1 for v, k in enumerate([c for c in char_freq.keys() if char_freq[c] > min_char_freq])}
     tag_map = {k: v + 1 for v, k in enumerate(tag_map)}
-
+    
     # add special tokens to map
     word_map['<pad>'] = 0
     word_map['<end>'] = len(word_map)
@@ -152,13 +153,12 @@ def create_maps(words, tags, min_word_freq=5, min_char_freq=1):
     tag_map['<pad>'] = 0
     tag_map['<start>'] = len(tag_map)
     tag_map['<end>'] = len(tag_map)
-
+    
     return word_map, char_map, tag_map
 
 word_map, char_map, tag_map = create_maps(b+b1+b2 ,f + f1 +f2,1,1)
 
-
-def create_input_tensors(words, tags, probs, word_map, char_map, tag_map, is_punct):
+def create_input_tensors(words, tags, probs, word_map, char_map, tag_map):
     """
     Creates input tensors with padding using maps.
     :param words: words in the input
@@ -219,7 +219,7 @@ def create_input_tensors(words, tags, probs, word_map, char_map, tag_map, is_pun
     padded_probs = []
     padded_is_punct = []
 
-    for word, w, cf, cb, cmf, cmb, t,p,punct in zip(words, wmaps, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, tmaps,probs,is_punct):
+    for word, w, cf, cb, cmf, cmb, t,p in zip(words, wmaps, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, tmaps,probs):
         # Sanity  checks
         assert len(w) == len(cmf) == len(cmb) == len(t)
         assert len(cmaps_f) == len(cmaps_b)
@@ -240,11 +240,11 @@ def create_input_tensors(words, tags, probs, word_map, char_map, tag_map, is_pun
         #padded_probs.append(p + [0] * (word_pad_len - len(p)))
         for i in range((word_pad_len)-len(p)):
             p.append([float(0),float(1)])
-
+            
         padded_probs.append(p)
 
         # is_punct is getting padded
-        padded_is_punct.append(punct + [2] *(word_pad_len - len(punct)))
+        #padded_is_punct.append(punct + [2] *(word_pad_len - len(punct)))
 
 
         wmap_lengths.append(len(w))
@@ -262,31 +262,32 @@ def create_input_tensors(words, tags, probs, word_map, char_map, tag_map, is_pun
     padded_cmarkers_f = torch.LongTensor(padded_cmarkers_f)
     padded_cmarkers_b = torch.LongTensor(padded_cmarkers_b)
     padded_tmaps = torch.LongTensor(padded_tmaps)
-    padded_is_punct = torch.FloatTensor(padded_is_punct)
+    #padded_is_punct = torch.FloatTensor(padded_is_punct)
     wmap_lengths = torch.LongTensor(wmap_lengths)
     cmap_lengths = torch.LongTensor(cmap_lengths)
     padded_probs = torch.FloatTensor(padded_probs)
 
-    return padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs,padded_is_punct
+    return padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs
 
 #training data
-padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs, padded_is_punct = create_input_tensors(b,f,e, word_map, char_map, tag_map,g)
+padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs = create_input_tensors(b,f,e, word_map, char_map, tag_map)
 
-t_inputs = data_utils.TensorDataset( padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs,padded_is_punct)
+t_inputs = data_utils.TensorDataset( padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs)
 train_loader = torch.utils.data.DataLoader(t_inputs, batch_size = batch_size, shuffle=True, num_workers=workers, pin_memory=False)
 
 #validation data
 
-padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs,padded_is_punct = create_input_tensors(b1,f1,e1, word_map, char_map, tag_map,g1)
+padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs = create_input_tensors(b1,f1,e1, word_map, char_map, tag_map)
 
-d_inputs = data_utils.TensorDataset( padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs,padded_is_punct)
+d_inputs = data_utils.TensorDataset( padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs)
 val_loader = torch.utils.data.DataLoader(d_inputs, batch_size = 1, shuffle=False, num_workers=workers, pin_memory=False)
+
+
 
 #test data
 
-padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs,padded_is_punct = create_input_tensors(b2,f2,e2, word_map, char_map, tag_map,g2)
-
-d_inputs = data_utils.TensorDataset( padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs,padded_is_punct)
+padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs = create_input_tensors(b2,f2,e2, word_map, char_map, tag_map)
+d_inputs = data_utils.TensorDataset( padded_wmaps, padded_cmaps_f, padded_cmaps_b, padded_cmarkers_f, padded_cmarkers_b, padded_tmaps, wmap_lengths, cmap_lengths , padded_probs)
 test_loader = torch.utils.data.DataLoader(d_inputs, batch_size = 1, shuffle=False, num_workers=workers, pin_memory=False)
 
 def init_embedding(input_embedding):
@@ -364,13 +365,12 @@ def load_embeddings(emb_file, word_map, expand_vocab=True):
 embeddings, word_map, lm_vocab_size = load_embeddings(emb_file, word_map,expand_vocab)
 charset_size = len(char_map)
 model = LM_LSTM_CRF(charset_size, char_emb_dim, char_rnn_dim, char_rnn_layers,
-        lm_vocab_size, word_emb_dim, word_rnn_dim, word_rnn_layers, dropout).to('cuda')
-
+                 lm_vocab_size, word_emb_dim, word_rnn_dim, word_rnn_layers, dropout).to('cuda')
+        
 model.init_word_embeddings(embeddings.to(device))  # initialize embedding layer with pre-trained embeddings
 model.fine_tune_word_embeddings(fine_tune_word_embeddings)  # fine-tune
 optimizer = optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate)
 
-#loss_fn = nn.BCELoss().to(device)
 loss_fn = nn.KLDivLoss(reduction='batchmean').to(device)
 
 class AverageMeter(object):
@@ -393,8 +393,8 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = print_frequency):
-
+def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = 2):
+    
     model.train()  # training mode enables dropout
 
     batch_time = AverageMeter()  # forward prop. + back prop. time per batch
@@ -405,9 +405,8 @@ def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = print_fre
     start = time.time()
 
     # Batches
-    for i, (wmaps, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, tmaps, wmap_lengths, cmap_lengths, probs,puncts) in enumerate(train_loader):
-        #print(tmaps)
-        #print(puncts)
+    for i, (wmaps, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, tmaps, wmap_lengths, cmap_lengths, probs) in enumerate(train_loader):
+        
         data_time.update(time.time() - start)
         max_word_len = max(wmap_lengths.tolist())
 
@@ -415,31 +414,32 @@ def train(train_loader, model, loss_fn, optimizer, epoch, print_freq = print_fre
         # This saves some compute on nn.Linear layers (RNNs are unaffected, since they don't compute over the pads)
         wmaps = wmaps[:, :max_word_len].to(device)
         probs = probs[:, :max_word_len].to(device)
-        puncts = puncts[:, :max_word_len].to(device)
         wmap_lengths = wmap_lengths.to(device)
         cmarkers_f = cmarkers_f[:, :max_word_len].to(device)
         cmarkers_b = cmarkers_b[:, :max_word_len].to(device)
         tmaps = tmaps[:, :max_word_len].to(device)
-
+        
         words = []
         for i in range(len(wmaps)):
             value_to_key = []
             for j in range(len(wmaps[i])):
                 value_to_key.append(list(word_map.keys())[list(word_map.values()).index(wmaps.cpu().data.numpy()[i][j])])
             words.append(value_to_key)
-
+        
         # Forward prop.
-        scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps,puncts)
-
+        scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps)
+        #print(scoires.size())
+        #print(scores)
+        #scores = [siore[0] for score in scores ]
         # We don't predict the next word at the pads or <end> tokens
-        # We will only predict at [dunston, checks, in] among [dunston, checks, in, <end>, <pad>, <pad>, ...]
+        #: We will only predict at [dunston, checks, in] among [dunston, checks, in, <end>, <pad>, <pad>, ...]
         # So, prediction lengths are word sequence lengths - 1
         lm_lengths = wmap_lengths_sorted - 1
         lm_lengths = lm_lengths.tolist()
-
+        
         # loss
-        probs_sorted.resize_(scores.size())
-
+        probs_sorted.resize_(scores.size())  
+        
         # predicted scores and actual targets
         scores = pack_padded_sequence(scores, lm_lengths, batch_first=True).data
         targets = pack_padded_sequence(probs_sorted, lm_lengths, batch_first=True).data
@@ -501,7 +501,7 @@ def match_M(batch_scores_no_padd, batch_labels_no_pad):
     :return: batch_num_m: number of words considered for m=[1,2,3,4] while evaluating score
              batch_score_m: total score of words considered for m=[1,2,3,4]
     """
-    top_m = [1,5,10]
+    top_m = [1, 5, 10]
     batch_num_m=[]
     batch_score_m=[]
     for m in top_m:
@@ -541,7 +541,7 @@ def match_M(batch_scores_no_padd, batch_labels_no_pad):
         batch_score_m.append(sum(intersects_lst))
     return batch_num_m, batch_score_m
 
-import json
+
 for epoch in range(0, epochs):
         # One epoch's training
         train(train_loader, model, loss_fn, optimizer, epoch)
@@ -552,7 +552,7 @@ for epoch in range(0, epochs):
         score_m = [0, 0, 0]
         val_results = []
         with torch.no_grad():
-            for i, ( wmaps, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, tmaps, wmap_lengths, cmap_lengths, probs, puncts) in enumerate(val_loader):
+            for i, ( wmaps, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, tmaps, wmap_lengths, cmap_lengths, probs) in enumerate(val_loader):
                     # get maximum word len in the batch
                     max_word_len = max(wmap_lengths.tolist())
 
@@ -564,8 +564,7 @@ for epoch in range(0, epochs):
                     cmarkers_f = cmarkers_f[:, :max_word_len].to(device)
                     cmarkers_b = cmarkers_b[:, :max_word_len].to(device)
                     tmaps = tmaps[:, :max_word_len].to(device)
-                    puncts = puncts[:, :max_word_len].to(device)
-
+                    
                     #get actual words from the word mappings
                     words = []
                     for i in range(len(wmaps)):
@@ -575,8 +574,8 @@ for epoch in range(0, epochs):
                         words.append(value_to_key)
 
                     # Forward prop.
-                    scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps,puncts)
-
+                    scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f, cmaps_b, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths, probs, tmaps)
+                    #print(scores.type())
                     scores = scores.tolist()
                     probs_sorted = probs_sorted.tolist()
                     for i in range(len(scores)):
@@ -589,6 +588,11 @@ for epoch in range(0, epochs):
 
                     probs_sorted = probs_sorted.reshape(probs_sorted.size(0),probs_sorted.size(1)).to(device)
 
+                    #print(scores.size())
+
+                    #print(probs_sorted.size())
+
+                    #scores = [score[0] for score in scores]
                     lm_lengths = wmap_lengths_sorted - 1
                     lm_lengths = lm_lengths.tolist()
                     # fix padding and evaluate score
@@ -600,21 +604,24 @@ for epoch in range(0, epochs):
                     for scores in batch_scores_no_padd:
                         val_results.append(scores.tolist())
 
+            #with open('val_scores.txt', 'w') as f:
+                #f.write(json.dumps(val_results))
+
             m_score = [i/j for i,j in zip(score_m, num_m)]
             score = sum(m_score)/len(m_score)
-            print(score)
             if score>max_score:
                 max_score = score
                 max_m_score = m_score
                 print(max_score)
 
-                with open('val_scores.txt', 'w') as f:
+                with open('val_scores.txt','w') as f:
                     f.write(json.dumps(val_results))
+                
 
                 final_results = []
                 with torch.no_grad():
-                    for j, ( wmaps_t, cmaps_f_t, cmaps_b_t, cmarkers_f_t, cmarkers_b_t, tmaps_t, wmap_lengths_t, cmap_lengths_t, probs_t,puncts_t) in enumerate(test_loader):
-
+                    for j, ( wmaps_t, cmaps_f_t, cmaps_b_t, cmarkers_f_t, cmarkers_b_t, tmaps_t, wmap_lengths_t, cmap_lengths_t, probs_t,) in enumerate(test_loader):
+                       
                         max_word_len = max(wmap_lengths_t.tolist())
                         wmaps = wmaps_t[:, :max_word_len].to(device)
                         probs = probs_t[:, :max_word_len].to(device)
@@ -622,8 +629,8 @@ for epoch in range(0, epochs):
                         cmarkers_f = cmarkers_f_t[:, :max_word_len].to(device)
                         cmarkers_b = cmarkers_b_t[:, :max_word_len].to(device)
                         tmaps = tmaps_t[:, :max_word_len].to(device)
-                        puncts = puncts_t[:, :max_word_len].to(device)
-
+                        #puncts = puncts_t[:, :max_word_len].to(device)
+                       
                         words = []
                         for i in range(len(wmaps)):
                             value_to_key = []
@@ -631,14 +638,13 @@ for epoch in range(0, epochs):
                                 value_to_key.append(list(word_map.keys())[list(word_map.values()).index(wmaps.cpu().data.numpy()[i][j])])
                             words.append(value_to_key)
 
-                        scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f_t, cmaps_b_t, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths_t, probs, tmaps,puncts)
+                        scores, tmaps_sorted, wmaps_sorted, probs_sorted, wmap_lengths_sorted, _ = model(words, cmaps_f_t, cmaps_b_t, cmarkers_f, cmarkers_b, wmaps, wmap_lengths, cmap_lengths_t, probs, tmaps)
                         scores = scores.tolist()
                         probs_sorted = probs_sorted.tolist()
                         for i in range(len(scores)):
                             for j in range(len(scores[i])):
                                 scores[i][j].pop(1)
                                 probs_sorted[i][j].pop(1)
-	                            #pass
 
                         scores = torch.FloatTensor(scores).to(device)
                         probs_sorted = torch.FloatTensor(probs_sorted).to(device)
@@ -662,10 +668,11 @@ for epoch in range(0, epochs):
                         #batch_num_m, batch_score_m = match_M(batch_scores_no_padd, batch_labels_no_pad)
                         #num_m = [sum(i) for i in zip(num_m, batch_num_m)]
                         #score_m = [sum(i) for i in zip(score_m, batch_score_m)]
-
+                        
                 with open('scores.txt', 'w') as f:
                     f.write(json.dumps(final_results))
 
 
 
 print(max_score)
+
