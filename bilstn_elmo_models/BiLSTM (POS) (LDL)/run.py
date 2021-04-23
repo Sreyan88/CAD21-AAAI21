@@ -243,17 +243,11 @@ def create_input_tensors(words, tags, probs, word_map, char_map, tag_map):
             
         padded_probs.append(p)
 
-        # is_punct is getting padded
-        #padded_is_punct.append(punct + [2] *(word_pad_len - len(punct)))
 
 
         wmap_lengths.append(len(w))
         cmap_lengths.append(len(cf))
 
-        # Sanity check
-        #assert len(padded_wmaps[-1]) == len(padded_tmaps[-1]) == len(padded_cmarkers_f[-1]) == len(
-        #    padded_cmarkers_b[-1]) == word_pad_len == len(padded_probs[-1])
-        #assert len(padded_cmaps_f[-1]) == len(padded_cmaps_b[-1]) == char_pad_len
 
     #converting to tensor
     padded_wmaps = torch.LongTensor(padded_wmaps)

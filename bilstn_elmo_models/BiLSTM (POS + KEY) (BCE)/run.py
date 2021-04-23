@@ -73,7 +73,7 @@ def read_data(filename):
 a,b,c,d,e,f,g = read_data('train_sci.txt')
 a1,b1,c1,d1,e1,f1,g1 = read_data('valid_sci.txt')
 
-
+#reding the dataset
 def read_data_test(filename):
     """
     This function reads the data from .txt file.

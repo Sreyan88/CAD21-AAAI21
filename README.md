@@ -1,3 +1,5 @@
-# CAD21@AAAI21
+# Cisco at AAAI-CAD21 shared task: Predicting Emphasis in Presentation Slidesusing Contextualized Embeddings
 
-Code for "Predicting Emphasis in Presentation Slides Shared Task" at CAD21
+This repository contains code for our paper titled : [Cisco at AAAI-CAD21 shared task: Predicting Emphasis in Presentation Slidesusing Contextualized Embeddings](https://arxiv.org/pdf/2101.11422.pdf) 
+
+This paper was accepted at 35th AAAI Conference on Artificial Intelligence, and is based on the shared task: Predicting Emphasis in Presentation Slides.

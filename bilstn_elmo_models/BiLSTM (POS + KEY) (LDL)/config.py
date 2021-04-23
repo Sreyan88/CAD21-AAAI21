@@ -3,7 +3,7 @@ train_file = 'final_punct_train.txt'
 dev_file = 'final_punct_dev.txt'
 device = 'cuda'
 # Location of Glove embedding file, couldn't include in git due to its size
-emb_file = '/media/data_dump/asr/zindi_hackathon/AAAI/emphasis_selection/BiLSTM_Attention_approach/glove.6B.100d.txt'
+emb_file = '/AAAI/emphasis_selection/BiLSTM_Attention_approach/glove.6B.100d.txt'
 
 #index of words, tags and probability in the input
 word_index = 1 
