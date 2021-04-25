@@ -1,4 +1,4 @@
-#Location of datasets
+#Location of datasets to be used
 train_file = 'final_punct_train.txt'
 dev_file = 'final_punct_dev.txt'
 device = 'cuda'
