@@ -5,6 +5,7 @@ The folder *Original_Dataset* contains the dataset provided by the organiser. Ea
 Statistics of the Original Dataset is as follows:
 
 |      |Total Slides | Total Sentences | Total Tokens |
+|  ---  | ----------- | ---------------- | ------------- |
 |Train | 1241        |    8849         |    96934     |
 |Dev   | 180         |    1175         |    12822     |
 |Test  | 355         |    2569         |    28108     |
